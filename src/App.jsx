@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { CONFIG } from './config'
+import { TEMPLATES } from './templates'
 import { useCamera } from './hooks/useCamera'
 import { captureFrame } from './lib/capture'
 import { composeStrip } from './lib/strip'
-import { downloadCanvas } from './lib/output'
+import { downloadCanvas, todayLabel } from './lib/output'
 import CameraView from './components/CameraView'
 import ResultView from './components/ResultView'
 
@@ -17,12 +25,29 @@ export default function App() {
   const [shotCount, setShotCount] = useState(0)
   const [countdown, setCountdown] = useState(null)
   const [flash, setFlash] = useState(false)
-  const [stripUrl, setStripUrl] = useState(null)
+  const [shots, setShots] = useState([]) // foto mentah (sudah difilter)
   const [musicOn, setMusicOn] = useState(true)
 
-  const stripCanvasRef = useRef(null)
+  // Template dipilih di awal; teks diisi di akhir
+  const [templateId, setTemplateId] = useState(TEMPLATES[0].id)
+  const [title, setTitle] = useState(CONFIG.defaultTitle)
+  const [subtitle, setSubtitle] = useState(todayLabel)
+
   const runningRef = useRef(false)
   const audioRef = useRef(null)
+
+  // Strip dirender ulang setiap teks berubah (foto tidak diambil ulang)
+  const dTitle = useDeferredValue(title)
+  const dSubtitle = useDeferredValue(subtitle)
+
+  const strip = useMemo(
+    () =>
+      shots.length
+        ? composeStrip(shots, { templateId, title: dTitle, subtitle: dSubtitle })
+        : null,
+    [shots, templateId, dTitle, dSubtitle],
+  )
+  const stripUrl = useMemo(() => (strip ? strip.toDataURL('image/png') : null), [strip])
 
   const startSession = useCallback(async () => {
     if (runningRef.current || !ready) return
@@ -32,7 +57,7 @@ export default function App() {
     setShotCount(0)
     if (musicOn) audioRef.current?.play().catch(() => { })
 
-    const shots = []
+    const taken = []
     for (let i = 0; i < takes; i++) {
       for (let s = CONFIG.countdownSeconds; s > 0; s--) {
         setCountdown(s)
@@ -40,7 +65,7 @@ export default function App() {
       }
       setCountdown(null)
 
-      shots.push(captureFrame(videoRef.current))
+      taken.push(captureFrame(videoRef.current))
       setShotCount(i + 1)
 
       setFlash(true)
@@ -50,22 +75,22 @@ export default function App() {
       if (i < takes - 1) await wait(CONFIG.pauseBetweenTakes)
     }
 
-    const strip = composeStrip(shots)
-    stripCanvasRef.current = strip
-    setStripUrl(strip.toDataURL('image/png'))
+    setShots(taken)
     setPhase('result')
     runningRef.current = false
   }, [ready, takes, musicOn, videoRef])
 
   const handleDownload = useCallback(() => {
-    if (stripCanvasRef.current) downloadCanvas(stripCanvasRef.current)
-  }, [])
+    if (strip) downloadCanvas(strip)
+  }, [strip])
 
   const handlePrint = useCallback(() => window.print(), [])
 
   const retake = useCallback(() => {
-    setStripUrl(null)
+    setShots([])
     setShotCount(0)
+    setTitle(CONFIG.defaultTitle) // sesi berikutnya mulai dari teks bawaan
+    setSubtitle(todayLabel())
     setPhase('idle')
   }, [])
 
@@ -85,6 +110,11 @@ export default function App() {
   useEffect(() => {
     const onKey = (e) => {
       if (e.repeat) return
+
+      // Jangan ganggu saat mengetik di input
+      const tag = e.target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+
       if (e.code === 'Space') {
         e.preventDefault()
         document.activeElement?.blur()
@@ -102,6 +132,8 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [phase, startSession, handleDownload, handlePrint, retake])
 
+  const settings = { templateId, onTemplate: setTemplateId }
+
   return (
     <div className="app">
       {/* Kamera tetap hidup di belakang saat preview, supaya "Foto lagi" instan */}
@@ -117,12 +149,17 @@ export default function App() {
           onTakesChange={setTakes}
           shotCount={shotCount}
           onShutter={startSession}
+          settings={settings}
         />
       </div>
 
       {phase === 'result' && (
         <ResultView
           stripUrl={stripUrl}
+          title={title}
+          onTitle={setTitle}
+          subtitle={subtitle}
+          onSubtitle={setSubtitle}
           onDownload={handleDownload}
           onPrint={handlePrint}
           onRetake={retake}

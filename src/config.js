@@ -9,14 +9,11 @@ export const CONFIG = {
     mirror: true,
     photoAspect: 3 / 4, // lebar / tinggi tiap foto
 
-    // Layout strip (px, resolusi export)
+    // Resolusi export strip (px). Layout dan warna ada di templates.js
     stripWidth: 720,
-    stripPadding: 40,
-    stripGap: 28,
-    footerHeight: 130,
-    footerText: 'MERRY CHRISTMAS 2026', // '' untuk tanpa footer
-    paper: '#f4f1ea',
-    ink: '#2a2520',
+
+    // Isi awal kolom judul. Kosongkan '' kalau mau mulai tanpa teks
+    defaultTitle: 'MERRY CHRISTMAS 2026',
 
     // Filter. Untuk B&W murni: shadow [0,0,0], highlight [255,255,255]
     filter: {

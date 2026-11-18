@@ -8,3 +8,6 @@ export function downloadCanvas(canvas, name = 'photobooth') {
         setTimeout(() => URL.revokeObjectURL(url), 1000)
     }, 'image/png')
 }
+
+export const todayLabel = () =>
+    new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
